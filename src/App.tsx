@@ -7,6 +7,7 @@ import SeguimientoManager from './components/SeguimientoManager';
 import NotificationsPanel from './components/NotificationsPanel';
 import UsersManager from './components/UsersManager';
 import LoginForm from './components/LoginForm';
+import ZonesManager from './components/ZonesManager';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -87,6 +88,7 @@ function App() {
     if (role === 'Administrador') {
       return [
         ...baseTabs.slice(0, 2), // Dashboard y Mapa
+        { id: 'zonas', label: 'Zonas', icon: MapPin },
         { id: 'locales', label: 'Locales', icon: MapPin },
         ...baseTabs.slice(2), // Seguimiento y Notificaciones
         { id: 'usuarios', label: 'Usuarios', icon: UserCheck }
@@ -110,6 +112,8 @@ function App() {
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard users={users} currentUser={currentUser} />;
+      case 'zonas':
+        return currentUser?.role === 'Administrador' ? <ZonesManager /> : null;
       case 'locales':
         return currentUser?.role === 'Administrador' ? <LocalesManager /> : null;
       case 'mapa':

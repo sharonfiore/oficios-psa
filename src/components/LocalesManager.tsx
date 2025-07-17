@@ -1,10 +1,58 @@
 import React, { useState } from 'react';
-import { Plus, Search, Edit, Trash2, MapPin, Phone, Mail, Navigation, Eye } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, MapPin, Phone, Mail, Navigation, Target } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix para los iconos de Leaflet
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+interface Local {
+  id: number;
+  name: string;
+  owner: string;
+  phone: string;
+  email: string;
+  address: string;
+  zone: string;
+  type: string;
+  coordinates: { lat: number; lng: number };
+  status: string;
+  notes: string;
+}
+
+interface LocationSelectorProps {
+  onLocationSelect: (lat: number, lng: number) => void;
+  initialPosition?: { lat: number; lng: number };
+}
+
+const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationSelect, initialPosition }) => {
+  const [position, setPosition] = useState<{ lat: number; lng: number } | null>(
+    initialPosition || null
+  );
+
+  useMapEvents({
+    click: (e) => {
+      const { lat, lng } = e.latlng;
+      setPosition({ lat, lng });
+      onLocationSelect(lat, lng);
+    }
+  });
+
+  return position ? <Marker position={[position.lat, position.lng]} /> : null;
+};
 
 const LocalesManager = () => {
   const [showForm, setShowForm] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedZone, setSelectedZone] = useState('all');
+  const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const zones = [
     { id: 'all', name: 'Todas las Zonas' },
@@ -15,7 +63,7 @@ const LocalesManager = () => {
     { id: 'zona-5', name: 'Zona 5 - Oeste' }
   ];
 
-  const [locales, setLocales] = useState([
+  const [locales, setLocales] = useState<Local[]>([
     {
       id: 1,
       name: 'Panadería San José',
@@ -65,15 +113,40 @@ const LocalesManager = () => {
     address: '',
     zone: 'zona-1',
     type: '',
-    notes: ''
+    notes: '',
+    coordinates: { lat: 0, lng: 0 }
   });
+
+  const openLocationSelector = () => {
+    setShowMapModal(true);
+    setSelectedLocation(formData.coordinates.lat !== 0 ? formData.coordinates : null);
+  };
+
+  const handleLocationSelect = (lat: number, lng: number) => {
+    setSelectedLocation({ lat, lng });
+  };
+
+  const confirmLocation = () => {
+    if (selectedLocation) {
+      setFormData({
+        ...formData,
+        coordinates: selectedLocation
+      });
+      setShowMapModal(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!formData.coordinates.lat || !formData.coordinates.lng) {
+      alert('Por favor, selecciona la ubicación del local en el mapa');
+      return;
+    }
+    
     const newLocal = {
       id: Date.now(),
       ...formData,
-      coordinates: { lat: 10.4696 + Math.random() * 0.01, lng: -66.9036 + Math.random() * 0.01 },
       status: 'Activo'
     };
     setLocales([...locales, newLocal]);
@@ -85,8 +158,10 @@ const LocalesManager = () => {
       address: '',
       zone: 'zona-1',
       type: '',
-      notes: ''
+      notes: '',
+      coordinates: { lat: 0, lng: 0 }
     });
+    setSelectedLocation(null);
     setShowForm(false);
   };
 
@@ -107,11 +182,15 @@ const LocalesManager = () => {
           window.open(url, '_blank');
         },
         (error) => {
-          alert('No se pudo obtener la ubicación actual');
+          // Fallback: abrir directamente en Google Maps
+          const url = `https://www.google.com/maps/search/${local.coordinates.lat},${local.coordinates.lng}`;
+          window.open(url, '_blank');
         }
       );
     } else {
-      alert('Geolocalización no soportada');
+      // Fallback: abrir directamente en Google Maps
+      const url = `https://www.google.com/maps/search/${local.coordinates.lat},${local.coordinates.lng}`;
+      window.open(url, '_blank');
     }
   };
 
@@ -201,9 +280,15 @@ const LocalesManager = () => {
             </div>
 
             {local.notes && (
-              <div className="text-sm text-gray-600 mb-4">
-                <strong>Notas:</strong> {local.notes}
-              </div>
+              <>
+                <div className="text-sm text-gray-600 mb-4">
+                  <strong>Notas:</strong> {local.notes}
+                </div>
+                
+                <div className="text-sm text-gray-600 mb-4">
+                  <strong>Coordenadas:</strong> {local.coordinates.lat.toFixed(6)}, {local.coordinates.lng.toFixed(6)}
+                </div>
+              </>
             )}
 
             <div className="flex space-x-2">
@@ -336,6 +421,33 @@ const LocalesManager = () => {
                   placeholder="Horarios, información adicional..."
                 />
               </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ubicación en el Mapa *
+                </label>
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={openLocationSelector}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Target className="w-4 h-4" />
+                    <span>Seleccionar en Mapa</span>
+                  </button>
+                  {formData.coordinates.lat !== 0 && (
+                    <div className="text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+                      ✓ Ubicación seleccionada
+                    </div>
+                  )}
+                </div>
+                {formData.coordinates.lat !== 0 && (
+                  <div className="mt-2 text-xs text-gray-600">
+                    Coordenadas: {formData.coordinates.lat.toFixed(6)}, {formData.coordinates.lng.toFixed(6)}
+                  </div>
+                )}
+              </div>
+              
               <div className="flex space-x-3 pt-4">
                 <button
                   type="submit"
@@ -352,6 +464,65 @@ const LocalesManager = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      
+      {/* Location Selection Modal */}
+      {showMapModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh]">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Seleccionar Ubicación del Local</h3>
+              <p className="text-sm text-gray-600 mt-1">Haz clic en el mapa para marcar la ubicación exacta</p>
+            </div>
+            <div className="p-6">
+              <div className="w-full h-96 rounded-lg border border-gray-300 mb-4 overflow-hidden">
+                <MapContainer
+                  center={[10.4696, -66.9036]}
+                  zoom={15}
+                  style={{ height: '100%', width: '100%' }}
+                >
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  />
+                  <LocationSelector
+                    onLocationSelect={handleLocationSelect}
+                    initialPosition={selectedLocation || undefined}
+                  />
+                </MapContainer>
+              </div>
+              
+              {selectedLocation && (
+                <div className="bg-blue-50 p-3 rounded-lg mb-4">
+                  <p className="text-sm text-blue-800">
+                    <strong>Ubicación seleccionada:</strong><br />
+                    Latitud: {selectedLocation.lat.toFixed(6)}<br />
+                    Longitud: {selectedLocation.lng.toFixed(6)}
+                  </p>
+                </div>
+              )}
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={confirmLocation}
+                  disabled={!selectedLocation}
+                  className="flex-1 bg-blue-800 hover:bg-blue-900 disabled:bg-gray-400 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Confirmar Ubicación
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMapModal(false);
+                    setSelectedLocation(null);
+                  }}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

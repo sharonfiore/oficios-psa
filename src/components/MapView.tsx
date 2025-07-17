@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Navigation, Search, Filter, Eye, Plus } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix para los iconos de Leaflet
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
 interface MapViewProps {
   currentUser: any;
@@ -182,61 +193,121 @@ const MapView: React.FC<MapViewProps> = ({ currentUser }) => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Mapa Simulado */}
           <div className="lg:col-span-2">
-            <div className="bg-gray-100 rounded-lg p-4 h-96 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-green-50">
-                {/* Simulación de mapa */}
-                <div className="absolute inset-0 opacity-20">
-                  <div className="w-full h-full bg-gradient-to-r from-blue-200 via-green-200 to-yellow-200"></div>
-                </div>
+            <div className="w-full h-96 rounded-lg border border-gray-300 overflow-hidden">
+              <MapContainer
+                center={[mapCenter.lat, mapCenter.lng]}
+                zoom={13}
+                style={{ height: '100%', width: '100%' }}
+              >
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                />
                 
                 {/* Marcadores de locales */}
-                {filteredLocales.map((local, index) => (
-                  <div
-                    key={local.id}
-                    className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group"
-                    style={{
-                      left: `${20 + (index * 15)}%`,
-                      top: `${30 + (index * 10)}%`
-                    }}
-                    onClick={() => handleNavigate(local)}
-                  >
-                    <div className="relative">
-                      <div 
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform"
-                        style={{ backgroundColor: getZoneColor(local.zone) }}
-                      >
-                        <MapPin className="w-4 h-4" />
+                {filteredLocales.map((local) => {
+                  // Crear icono personalizado con color de zona
+                  const customIcon = L.divIcon({
+                    html: `
+                      <div style="
+                        background-color: ${getZoneColor(local.zone)};
+                        width: 25px;
+                        height: 25px;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border: 2px solid white;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                        position: relative;
+                      ">
+                        <svg width="12" height="12" fill="white" viewBox="0 0 24 24">
+                          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                        </svg>
+                        ${local.pendingSeguimientos > 0 ? `
+                          <div style="
+                            position: absolute;
+                            top: -8px;
+                            right: -8px;
+                            background-color: #ef4444;
+                            color: white;
+                            border-radius: 50%;
+                            width: 16px;
+                            height: 16px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 10px;
+                            font-weight: bold;
+                          ">${local.pendingSeguimientos}</div>
+                        ` : ''}
                       </div>
-                      
-                      {/* Badge de seguimientos pendientes */}
-                      {local.pendingSeguimientos > 0 && (
-                        <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                          {local.pendingSeguimientos}
+                    `,
+                    className: 'custom-marker',
+                    iconSize: [25, 25],
+                    iconAnchor: [12, 12]
+                  });
+
+                  return (
+                    <Marker
+                      key={local.id}
+                      position={[local.coordinates.lat, local.coordinates.lng]}
+                      icon={customIcon}
+                      eventHandlers={{
+                        click: () => handleNavigate(local)
+                      }}
+                    >
+                      <Popup>
+                        <div className="p-2">
+                          <h3 className="font-semibold text-gray-900">{local.name}</h3>
+                          <p className="text-sm text-gray-600">{local.type}</p>
+                          <p className="text-sm text-gray-600">{local.address}</p>
+                          {local.pendingSeguimientos > 0 && (
+                            <p className="text-sm text-red-600 font-medium">
+                              {local.pendingSeguimientos} seguimiento{local.pendingSeguimientos > 1 ? 's' : ''} pendiente{local.pendingSeguimientos > 1 ? 's' : ''}
+                            </p>
+                          )}
+                          <button
+                            onClick={() => handleNavigate(local)}
+                            className="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+                          >
+                            Navegar
+                          </button>
                         </div>
-                      )}
-                      
-                      {/* Tooltip */}
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-lg">
-                          <div className="font-semibold">{local.name}</div>
-                          <div className="text-gray-300">{local.address}</div>
-                          <div className="text-blue-300">Click para navegar</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                      </Popup>
+                    </Marker>
+                  );
+                })}
 
                 {/* Ubicación del usuario */}
                 {userLocation && (
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                    <div className="w-4 h-4 bg-blue-600 rounded-full animate-pulse shadow-lg border-2 border-white"></div>
-                    <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs text-blue-600 font-semibold">
-                      Tu ubicación
-                    </div>
-                  </div>
+                  <Marker
+                    position={[userLocation.lat, userLocation.lng]}
+                    icon={L.divIcon({
+                      html: `
+                        <div style="
+                          background-color: #2563eb;
+                          width: 16px;
+                          height: 16px;
+                          border-radius: 50%;
+                          border: 3px solid white;
+                          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                          animation: pulse 2s infinite;
+                        "></div>
+                      `,
+                      className: 'user-location-marker',
+                      iconSize: [16, 16],
+                      iconAnchor: [8, 8]
+                    })}
+                  >
+                    <Popup>
+                      <div className="text-center">
+                        <p className="font-semibold text-blue-600">Tu ubicación</p>
+                      </div>
+                    </Popup>
+                  </Marker>
                 )}
-              </div>
+              </MapContainer>
             </div>
             
             {/* Leyenda */}
@@ -322,5 +393,28 @@ const MapView: React.FC<MapViewProps> = ({ currentUser }) => {
     </div>
   );
 };
+
+// Agregar estilos CSS para la animación
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes pulse {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.2);
+      opacity: 0.7;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  .user-location-marker {
+    animation: pulse 2s infinite;
+  }
+`;
+document.head.appendChild(style);
 
 export default MapView;
