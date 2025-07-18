@@ -333,7 +333,7 @@ const LocalesManager = () => {
             </div>
 
             {local.notes && (
-              <>
+              <div className="space-y-2">
                 <div className="text-sm text-gray-600 mb-4">
                   <strong>Notas:</strong> {local.notes}
                 </div>
@@ -341,7 +341,7 @@ const LocalesManager = () => {
                 <div className="text-sm text-gray-600 mb-4">
                   <strong>Coordenadas:</strong> {local.coordinates.lat.toFixed(6)}, {local.coordinates.lng.toFixed(6)}
                 </div>
-              </>
+              </div>
             )}
 
             <div className="flex space-x-2">
